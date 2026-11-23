@@ -42,7 +42,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="grid h-dvh grid-rows-[auto_1fr] overflow-hidden lg:grid-cols-[256px_minmax(0,1fr)_420px] lg:grid-rows-1">
+    <main className="grid h-dvh grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden lg:grid-cols-[256px_minmax(0,1fr)_420px] lg:grid-rows-1">
       <JournalSidebar />
       <EntriesPanel />
 
