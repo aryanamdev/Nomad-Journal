@@ -152,3 +152,13 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Hide hairline gaps between Leaflet tiles at fractional zoom levels. */
+.leaflet-tile-container img.leaflet-tile {
+  width: 256.6px !important;
+  height: 256.6px !important;
+}
+.leaflet-container {
+  background: #e8ebe6;
+  font-family: var(--font-sans);
+}

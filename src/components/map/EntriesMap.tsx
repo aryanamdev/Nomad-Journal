@@ -26,7 +26,7 @@ function FitBounds({ points }: { points: [number, number][] }) {
   useEffect(() => {
     if (points.length === 0) return;
     if (points.length === 1) map.setView(points[0], 9);
-    else map.fitBounds(L.latLngBounds(points), { padding: [48, 48], maxZoom: 10 });
+    else map.fitBounds(L.latLngBounds(points), { padding: [48, 48], maxZoom: 9 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, map]);
   return null;
