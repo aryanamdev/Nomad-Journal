@@ -1,12 +1,17 @@
-const base = "api/v2/users"
+const users = "/api/v2/users";
 
 export const ROUTES = {
-    HOME: "/",
-    USER: {
-        LOGIN: `${base}/login`,
-        REGISTER: `${base}/register`,
-        VIEWER: `${base}/me`,
-        LOGOUT: `${base}/logout`,
-        VERIFY_EMAIL: `${base}/verifyEmail`,
-    }
-} as const
+  HOME: "/",
+  DASHBOARD: "/dashboard",
+  PROFILE: "/profile",
+  USER: {
+    LOGIN: `${users}/login`,
+    REGISTER: `${users}/register`,
+    DEMO: `${users}/demo`,
+    VIEWER: `${users}/me`,
+    LOGOUT: `${users}/logout`,
+    VERIFY_EMAIL: `${users}/verifyEmail`,
+  },
+  JOURNALS: "/api/v2/journal",
+  ENTRIES: "/api/v2/entries",
+} as const;

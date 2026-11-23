@@ -1,49 +1,65 @@
-"use client"
-import { Suspense, useEffect } from "react"
-import { ROUTES } from "../constants/routes"
-import { useSearchParams } from "next/navigation"
-import axios from "axios"
-import toast from "react-hot-toast"
-import { useRouter } from "next/navigation"
+"use client";
 
-const VerifyEmail = () => {
-    const searchParams = useSearchParams()
-    const router = useRouter()
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { AuthShell } from "@/components/AuthShell";
+import { Button } from "@/components/ui/button";
+import { api } from "@/lib/api";
+import { ROUTES } from "../constants/routes";
 
-    const token = searchParams.get("token")
-    const verifyEmail = async () => {
-        try {
-            const response = await axios.post(ROUTES.USER.VERIFY_EMAIL, { token })
+type Status = { state: "loading" | "ok" | "error"; message: string };
 
-            const data = await response.data
+function VerifyEmail() {
+  const token = useSearchParams().get("token");
+  const [status, setStatus] = useState<Status>({ state: "loading", message: "Verifying your email…" });
+  const sent = useRef(false);
 
-            if (!data?.success) {
-                throw new Error(data?.message || "Error verifying email")
-            }
-
-            toast.success(data?.message)
-            router.push("/login")
-
-        } catch (error) {
-            toast.error("Error verifying email")
-            console.error("Error verifying email", error)
-        }
-    }
-
-    useEffect(() => {
-        verifyEmail()
-    }, [])
-
+  useEffect(() => {
+    if (sent.current) return; // avoid a double request in React strict mode
+    sent.current = true;
     if (!token) {
-        return <>Invalid token</>
+      setStatus({ state: "error", message: "This link is missing its verification token." });
+      return;
     }
+    api
+      .post(ROUTES.USER.VERIFY_EMAIL, { token })
+      .then(() => setStatus({ state: "ok", message: "Your email is verified. You can log in now." }))
+      .catch((err: Error) => setStatus({ state: "error", message: err.message }));
+  }, [token]);
 
-    return <>Verify Email</>
+  const Icon = status.state === "loading" ? Loader2 : status.state === "ok" ? CheckCircle2 : XCircle;
+
+  return (
+    <div className="grid justify-items-center gap-4 text-center">
+      <Icon
+        className={
+          status.state === "loading"
+            ? "text-muted-foreground size-10 animate-spin"
+            : status.state === "ok"
+              ? "size-10 text-green-600"
+              : "text-destructive size-10"
+        }
+      />
+      <p className="text-sm">{status.message}</p>
+      {status.state !== "loading" && (
+        <Button asChild className="w-full">
+          <Link href={status.state === "ok" ? "/login" : "/register"}>
+            {status.state === "ok" ? "Log in" : "Back to sign up"}
+          </Link>
+        </Button>
+      )}
+    </div>
+  );
 }
 
-const VerifyPage = () => {
-    return <Suspense><VerifyEmail /></Suspense>
+export default function VerifyPage() {
+  return (
+    <AuthShell title="Email verification" description="Confirming your Nomad Journal account.">
+      <Suspense>
+        <VerifyEmail />
+      </Suspense>
+    </AuthShell>
+  );
 }
-
-
-export default VerifyPage

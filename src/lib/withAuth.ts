@@ -1,58 +1,39 @@
 // src/lib/withAuth.ts
-import jwt from "jsonwebtoken";
 import { NextRequest, NextResponse } from "next/server";
+import { AUTH_COOKIE, verifyToken, TokenPayload } from "./jwt";
+import { errorResponse } from "./response";
 
-const JWT_SECRET = process.env.JWT_SECRET!;
-
-type UserPayload = { id: string };
-
-// naive cookie parser (small, zero-deps)
-function parseCookies(cookieHeader: string | null) {
-  const map: Record<string, string> = {};
-  if (!cookieHeader) return map;
-  cookieHeader.split(";").forEach((pair) => {
-    const [k, ...v] = pair.split("=");
-    if (!k) return;
-    const key = decodeURIComponent(k.trim());
-    const val = decodeURIComponent(v.join("=").trim());
-    map[key] = val;
-  });
-  return map;
-}
-
-export interface RouteContext {
-  params: {
-    [key: string]: string;
-  };
-}
+export type AuthUser = TokenPayload;
 
 /**
- * Handler signature: (req: Request, user: { userId }) => Promise<Response | NextResponse>
+ * Next.js 15 passes dynamic route params as a Promise. Handlers receive them
+ * already resolved so they can read `params.id` directly.
  */
-export function withAuth(handler: (req: NextRequest, user: UserPayload, context: RouteContext) => Promise<Response | NextResponse>) {
-  return async (req: NextRequest, context: RouteContext) => {
+type IncomingContext = { params: Promise<Record<string, string>> };
+export type RouteContext = { params: Record<string, string> };
+
+type Handler = (req: NextRequest, user: AuthUser, context: RouteContext) => Promise<Response>;
+
+export function withAuth(handler: Handler) {
+  return async (req: NextRequest, context: IncomingContext) => {
+    const token = req.cookies.get(AUTH_COOKIE)?.value;
+    if (!token) {
+      return NextResponse.json(errorResponse("Unauthorized"), { status: 401 });
+    }
+
+    let user: AuthUser;
     try {
-      // Read cookie header
-      const cookieHeader = req.headers.get("cookie");
-      const cookies = parseCookies(cookieHeader);
-      const token = cookies["token"];
+      user = verifyToken(token);
+    } catch {
+      return NextResponse.json(errorResponse("Session expired. Please log in again"), { status: 401 });
+    }
 
-      if (!token) {
-        return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-      }
-
-      let decoded: any;
-      try {
-        decoded = jwt.verify(token, JWT_SECRET) as UserPayload;
-      } catch (err) {
-        return NextResponse.json({ message: "Invalid or expired token" }, { status: 401 });
-      }
-
-      // Call actual handler with authenticated user
-      return await handler(req, decoded, context);
+    try {
+      const params = (await context?.params) ?? {};
+      return await handler(req, user, { params });
     } catch (err) {
-      // Fallback error handling
-      return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
+      console.error(err);
+      return NextResponse.json(errorResponse("Internal Server Error"), { status: 500 });
     }
   };
 }

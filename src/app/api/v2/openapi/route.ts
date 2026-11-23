@@ -14,7 +14,7 @@ export async function GET() {
         "content-type": "text/yaml; charset=utf-8",
       },
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { message: "OpenAPI spec not found" },
       { status: 500 }

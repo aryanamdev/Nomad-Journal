@@ -1,11 +1,4 @@
-import "@/dbConfig/dbConfig";
+import { createEntryController, getEntriesController } from "@/controllers/entryController";
 
-import {
-  createEntryController,
-  getEntriesController,
-} from "@/controllers/entryController";
-
-export {
-  createEntryController as POST,
-  getEntriesController as GET,
-};
+export const POST = createEntryController;
+export const GET = getEntriesController;

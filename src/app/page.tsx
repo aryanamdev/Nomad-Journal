@@ -1,102 +1,106 @@
 import Image from "next/image";
+import Link from "next/link";
+import { cookies } from "next/headers";
+import { BookOpen, CalendarDays, Map, Search, Smile, Tags } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/Logo";
+import { DemoButton } from "@/components/DemoButton";
 
-export default function Home() {
+const FEATURES = [
+  { icon: BookOpen, title: "A journal per trip", text: "Keep each trip, season or theme in its own colour-coded journal." },
+  { icon: Map, title: "See it on a map", text: "Pin entries to the places they happened and retrace the whole route." },
+  { icon: CalendarDays, title: "Calendar view", text: "Spot streaks and gaps at a glance, month by month." },
+  { icon: Smile, title: "Mood and weather", text: "Capture how a day felt, not just what happened." },
+  { icon: Tags, title: "Tags", text: "Group moments across journals: #food, #hiking, #sunsets." },
+  { icon: Search, title: "Search everything", text: "Find any entry by title, story, place or tag in a keystroke." },
+];
+
+export default async function Home() {
+  const loggedIn = Boolean((await cookies()).get("token")?.value);
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="min-h-dvh">
+      <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
+        <Logo />
+        <nav className="flex items-center gap-2">
+          {loggedIn ? (
+            <Button asChild>
+              <Link href="/dashboard">Open my journals</Link>
+            </Button>
+          ) : (
+            <>
+              <Button asChild variant="ghost">
+                <Link href="/login">Log in</Link>
+              </Button>
+              <Button asChild>
+                <Link href="/register">Sign up</Link>
+              </Button>
+            </>
+          )}
+        </nav>
+      </header>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
+      <main>
+        <section className="mx-auto grid max-w-3xl gap-6 px-6 pt-14 pb-12 text-center sm:pt-20">
+          <p className="text-primary text-sm font-medium">A travel journal for people who wander</p>
+          <h1 className="text-4xl font-semibold tracking-tight text-balance sm:text-6xl">
+            Remember every trip, not just the photos.
+          </h1>
+          <p className="text-muted-foreground mx-auto max-w-xl text-lg text-pretty">
+            Nomad Journal keeps your stories, places, moods and weather together, so you can browse a trip as a list, a
+            calendar or a map.
+          </p>
+          <div className="flex flex-col justify-center gap-3 sm:flex-row">
+            <DemoButton size="lg" />
+            <Button asChild size="lg" variant="outline">
+              <Link href={loggedIn ? "/dashboard" : "/register"}>{loggedIn ? "Open my journals" : "Create a free account"}</Link>
+            </Button>
+          </div>
+          <p className="text-muted-foreground text-xs">The demo opens a sample account. No sign-up needed.</p>
+        </section>
+
+        <section className="mx-auto max-w-6xl px-6">
+          <div className="bg-muted/40 overflow-hidden rounded-2xl border p-2 shadow-xl shadow-black/5">
             <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+              src="/screenshots/dashboard.png"
+              alt="The Nomad Journal dashboard: journals on the left, a map of entries in the middle and an entry's details on the right"
+              width={2400}
+              height={1400}
+              className="rounded-xl border"
+              priority
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
+          </div>
+        </section>
+
+        <section className="mx-auto grid max-w-6xl gap-10 px-6 py-24">
+          <h2 className="text-center text-3xl font-semibold tracking-tight">Everything a trip leaves behind, in one place</h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {FEATURES.map(({ icon: Icon, title, text }) => (
+              <div key={title} className="bg-card rounded-xl border p-6">
+                <Icon className="text-primary mb-4 size-6" />
+                <h3 className="font-medium">{title}</h3>
+                <p className="text-muted-foreground mt-1 text-sm">{text}</p>
+              </div>
+            ))}
+          </div>
+        </section>
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+
+      <footer className="text-muted-foreground mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 border-t px-6 py-8 text-sm sm:flex-row">
+        <span>
+          Built by{" "}
+          <a href="https://aryannamdev.online" className="hover:text-foreground underline underline-offset-4">
+            Aryan Namdev
+          </a>
+        </span>
+        <nav className="flex gap-4">
+          <a href="https://github.com/aryanamdev/Nomad-Journal" className="hover:text-foreground">
+            Source on GitHub
+          </a>
+          <a href="/api-docs" className="hover:text-foreground">
+            API docs
+          </a>
+        </nav>
       </footer>
     </div>
   );

@@ -1,198 +1,163 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { AppError, BadRequestError, UnauthorizedError } from "@/lib/errors";
-import { successResponse } from "@/lib/response";
-
-import { registerController, loginController, logoutController, verifyController, meController } from "@/controllers/authController";
+import { makeReq, ctx, USER_ID } from "./helpers";
+import { BadRequestError, ForbiddenError, UnauthorizedError } from "@/lib/errors";
+import {
+  registerController,
+  loginController,
+  logoutController,
+  verifyController,
+  meController,
+  demoLoginController,
+  updateMeController,
+} from "@/controllers/authController";
 import { authService } from "@/services/authService";
-import { validateBody } from "@/lib/validate";
 
 vi.mock("@/services/authService", () => ({
   authService: {
     register: vi.fn(),
     login: vi.fn(),
+    demoLogin: vi.fn(),
     verify: vi.fn(),
     me: vi.fn(),
+    updateMe: vi.fn(),
   },
 }));
 
-vi.mock("@/lib/validate", () => ({
-  validateBody: vi.fn(),
-}));
+const svc = vi.mocked(authService);
 
-const mockedAuthService = authService as unknown as {
-  register: ReturnType<typeof vi.fn>;
-  login: ReturnType<typeof vi.fn>;
-  verify: ReturnType<typeof vi.fn>;
-  me: ReturnType<typeof vi.fn>;
-};
-
-const mockedValidateBody = validateBody as unknown as ReturnType<typeof vi.fn>;
-
-const createJsonReq = (body: any) => ({
-  json: vi.fn().mockResolvedValue(body),
-  cookies: {
-    get: vi.fn().mockReturnValue({ value: "token" }),
-  },
-});
-
-const createReqWithToken = (token: string | undefined) => ({
-  cookies: {
-    get: vi.fn().mockReturnValue(token ? { value: token } : undefined),
-  },
-});
-
-beforeEach(() => {
-  vi.clearAllMocks();
-});
+beforeEach(() => vi.clearAllMocks());
 
 describe("registerController", () => {
-  it("returns 201 and success payload on successful registration", async () => {
-    const body = { email: "a@test.com", fullName: "User", password: "password123" };
-    const user = { id: "1", email: body.email };
+  const body = { email: "a@test.com", fullName: "Test User", password: "password123" };
 
-    mockedValidateBody.mockReturnValue(body);
-    mockedAuthService.register.mockResolvedValue(user);
-
-    const req = createJsonReq(body);
-    const res = await registerController(req as any);
-
+  it("returns 201 and tells the client whether email verification is needed", async () => {
+    svc.register.mockResolvedValue({ user: { email: body.email } as never, requiresVerification: true });
+    const res = await registerController(makeReq("/api/v2/users/register", { method: "POST", body, token: null }));
     expect(res.status).toBe(201);
     const json = await res.json();
-    expect(json.success).toBe(true);
-    expect(json.data).toEqual(user);
+    expect(json.data.requiresVerification).toBe(true);
+    expect(json.message).toMatch(/check your email/i);
   });
 
-  it("maps AppError to its status code", async () => {
-    const body = { email: "bad", fullName: "x", password: "short" };
-    const err = new BadRequestError("Invalid payload");
-
-    mockedValidateBody.mockImplementation(() => {
-      throw err;
-    });
-
-    const req = createJsonReq(body);
-    const res = await registerController(req as any);
-
+  it("rejects a short password before reaching the service", async () => {
+    const res = await registerController(
+      makeReq("/api/v2/users/register", { method: "POST", body: { ...body, password: "short" }, token: null })
+    );
     expect(res.status).toBe(400);
-    const json = await res.json();
-    expect(json.success).toBe(false);
-    expect(json.message).toBe("Invalid payload");
+    expect(svc.register).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 for malformed JSON", async () => {
+    const res = await registerController(makeReq("/api/v2/users/register", { method: "POST", rawBody: "{nope", token: null }));
+    expect(res.status).toBe(400);
+  });
+
+  it("maps a duplicate email to 400", async () => {
+    svc.register.mockRejectedValue(new BadRequestError("An account with this email already exists"));
+    const res = await registerController(makeReq("/api/v2/users/register", { method: "POST", body, token: null }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).message).toMatch(/already exists/);
   });
 });
 
 describe("loginController", () => {
-  it("sets token cookie and returns user on success", async () => {
-    const body = { email: "a@test.com", password: "password123" };
-    const user = { id: "1", email: body.email };
+  const body = { email: "a@test.com", password: "password123" };
 
-    mockedValidateBody.mockReturnValue(body);
-    mockedAuthService.login.mockResolvedValue({ token: "jwt-token", user });
-
-    const req = createJsonReq(body);
-    const res = await loginController(req as any);
-
+  it("sets an httpOnly session cookie on success", async () => {
+    svc.login.mockResolvedValue({ token: "jwt-token", user: { email: body.email } as never });
+    const res = await loginController(makeReq("/api/v2/users/login", { method: "POST", body, token: null }));
     expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json.success).toBe(true);
-    expect(json.data).toEqual(user);
-    const setCookieHeader = res.headers.get("set-cookie");
-    expect(setCookieHeader).toContain("token=");
+    const cookie = res.headers.get("set-cookie") ?? "";
+    expect(cookie).toContain("token=jwt-token");
+    expect(cookie.toLowerCase()).toContain("httponly");
   });
 
-  it("returns appropriate status for AppError", async () => {
-    const body = { email: "a@test.com", password: "wrong" };
-    const err = new UnauthorizedError("Incorrect email or password");
-
-    mockedValidateBody.mockReturnValue(body);
-    mockedAuthService.login.mockRejectedValue(err);
-
-    const req = createJsonReq(body);
-    const res = await loginController(req as any);
-
+  it("returns 401 for wrong credentials", async () => {
+    svc.login.mockRejectedValue(new UnauthorizedError("Incorrect email or password"));
+    const res = await loginController(makeReq("/api/v2/users/login", { method: "POST", body, token: null }));
     expect(res.status).toBe(401);
-    const json = await res.json();
-    expect(json.success).toBe(false);
-    expect(json.message).toBe("Incorrect email or password");
+  });
+
+  it("returns 403 for unverified accounts", async () => {
+    svc.login.mockRejectedValue(new ForbiddenError("Please verify your email before logging in"));
+    const res = await loginController(makeReq("/api/v2/users/login", { method: "POST", body, token: null }));
+    expect(res.status).toBe(403);
+  });
+});
+
+describe("demoLoginController", () => {
+  it("starts a session for the demo account", async () => {
+    svc.demoLogin.mockResolvedValue({ token: "demo-token", user: { isDemo: true } as never });
+    const res = await demoLoginController();
+    expect(res.status).toBe(200);
+    expect(res.headers.get("set-cookie")).toContain("token=demo-token");
   });
 });
 
 describe("logoutController", () => {
-  it("always returns 200 and clears token cookie", async () => {
-    const req = {} as any;
-    const res = await logoutController(req);
-
+  it("clears the session cookie", async () => {
+    const res = await logoutController();
     expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json.success).toBe(true);
-    const setCookieHeader = res.headers.get("set-cookie");
-    expect(setCookieHeader).toContain("token=");
+    expect(res.headers.get("set-cookie")).toMatch(/token=;.*Expires=Thu, 01 Jan 1970/);
   });
 });
 
 describe("verifyController", () => {
-  it("returns already verified message when service indicates so", async () => {
-    const body = { token: "token" };
-    mockedValidateBody.mockReturnValue(body);
-    mockedAuthService.verify.mockResolvedValue({ alreadyVerified: true });
+  const body = { token: "a".repeat(64) };
 
-    const req = createJsonReq(body);
-    const res = await verifyController(req as any);
-
+  it("reports an already verified account", async () => {
+    svc.verify.mockResolvedValue({ alreadyVerified: true });
+    const res = await verifyController(makeReq("/api/v2/users/verifyEmail", { method: "POST", body, token: null }));
     expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json.message).toBe("User already verified");
+    expect((await res.json()).message).toBe("Email already verified");
   });
 
-  it("returns verified successfully message when newly verified", async () => {
-    const body = { token: "token" };
-    mockedValidateBody.mockReturnValue(body);
-    mockedAuthService.verify.mockResolvedValue({ alreadyVerified: false });
-
-    const req = createJsonReq(body);
-    const res = await verifyController(req as any);
-
-    expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json.message).toBe("User verified successfully");
+  it("confirms a newly verified account", async () => {
+    svc.verify.mockResolvedValue({ alreadyVerified: false });
+    const res = await verifyController(makeReq("/api/v2/users/verifyEmail", { method: "POST", body, token: null }));
+    expect((await res.json()).message).toMatch(/verified/);
   });
 });
 
 describe("meController", () => {
-  it("returns current user when authService.me succeeds", async () => {
-    const token = "jwt-token";
-    const me = { id: "1", email: "a@test.com" };
-
-    mockedAuthService.me.mockResolvedValue({ success: true, user: me });
-
-    const req = {
-      cookies: {
-        get: vi.fn().mockReturnValue({ value: token }),
-      },
-    } as any;
-
-    const res = await meController(req);
+  it("returns the current user", async () => {
+    svc.me.mockResolvedValue({ success: true, user: { email: "a@test.com" } as never });
+    const res = await meController(makeReq("/api/v2/users/me"));
     expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json.success).toBe(true);
-    expect(json.data).toEqual(me);
+    expect((await res.json()).data.email).toBe("a@test.com");
   });
 
-  it("maps AppError from authService.me to status code", async () => {
-    const token = "bad-token";
-    const err = new UnauthorizedError("Invalid token");
-
-    mockedAuthService.me.mockRejectedValue(err);
-
-    const req = {
-      cookies: {
-        get: vi.fn().mockReturnValue({ value: token }),
-      },
-    } as any;
-
-    const res = await meController(req);
+  it("returns 401 when the session is invalid", async () => {
+    svc.me.mockRejectedValue(new UnauthorizedError("Invalid session"));
+    const res = await meController(makeReq("/api/v2/users/me", { token: "bad" }));
     expect(res.status).toBe(401);
-    const json = await res.json();
-    expect(json.success).toBe(false);
-    expect(json.message).toBe("Invalid token");
+  });
+});
+
+describe("updateMeController", () => {
+  it("updates the logged-in user's profile", async () => {
+    svc.updateMe.mockResolvedValue({ fullName: "New Name" } as never);
+    const res = await updateMeController(
+      makeReq("/api/v2/users/me", { method: "PATCH", body: { fullName: "New Name" } }),
+      ctx()
+    );
+    expect(res.status).toBe(200);
+    expect(svc.updateMe).toHaveBeenCalledWith(USER_ID, { fullName: "New Name" });
+  });
+
+  it("rejects a bio over 200 characters", async () => {
+    const res = await updateMeController(
+      makeReq("/api/v2/users/me", { method: "PATCH", body: { bio: "x".repeat(201) } }),
+      ctx()
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("requires a session", async () => {
+    const res = await updateMeController(
+      makeReq("/api/v2/users/me", { method: "PATCH", body: { bio: "hi" }, token: null }),
+      ctx()
+    );
+    expect(res.status).toBe(401);
   });
 });

@@ -1,13 +1,5 @@
-import "@/dbConfig/dbConfig";
+import { getEntryController, updateEntryController, deleteEntryController } from "@/controllers/entryController";
 
-import {
-  getEntryController,
-  updateEntryController,
-  deleteEntryController,
-} from "@/controllers/entryController";
-
-export {
-  getEntryController as GET,
-  updateEntryController as PATCH,
-  deleteEntryController as DELETE,
-};
+export const GET = getEntryController;
+export const PATCH = updateEntryController;
+export const DELETE = deleteEntryController;

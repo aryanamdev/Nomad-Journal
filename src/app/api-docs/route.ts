@@ -5,7 +5,7 @@ export function GET() {
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Time Capsule API Docs</title>
+    <title>Nomad Journal API Docs</title>
     <link
       rel="stylesheet"
       href="https://unpkg.com/swagger-ui-dist/swagger-ui.css"

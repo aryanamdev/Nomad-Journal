@@ -1,5 +1,5 @@
-// app/api/auth/logout/route.ts
-import "@/dbConfig/dbConfig";
 import { logoutController } from "@/controllers/authController";
 
-export { logoutController as GET };
+// POST is preferred; GET is kept for older clients.
+export const POST = logoutController;
+export const GET = logoutController;

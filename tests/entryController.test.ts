@@ -1,160 +1,95 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { AppError, BadRequestError, NotFoundError, UnauthorizedError } from "@/lib/errors";
-import { createEntryController, getEntriesController, getEntryController, updateEntryController, deleteEntryController } from "@/controllers/entryController";
+import { makeReq, ctx, USER_ID, JOURNAL_ID, ENTRY_ID } from "./helpers";
+import { NotFoundError } from "@/lib/errors";
+import {
+  createEntryController,
+  getEntriesController,
+  getEntryController,
+  updateEntryController,
+  deleteEntryController,
+} from "@/controllers/entryController";
 import { entryService } from "@/services/entryService";
-import { validateBody } from "@/lib/validate";
-
-vi.mock("@/lib/withAuth", () => ({
-  withAuth: (handler: any) => handler,
-}));
 
 vi.mock("@/services/entryService", () => ({
-  entryService: {
-    create: vi.fn(),
-    getAll: vi.fn(),
-    getById: vi.fn(),
-    update: vi.fn(),
-    remove: vi.fn(),
-  },
+  entryService: { create: vi.fn(), getAll: vi.fn(), getById: vi.fn(), update: vi.fn(), remove: vi.fn() },
 }));
 
-vi.mock("@/lib/validate", () => ({
-  validateBody: vi.fn(),
-}));
+const svc = vi.mocked(entryService);
+beforeEach(() => vi.clearAllMocks());
 
-const mockedEntryService = entryService as unknown as {
-  create: ReturnType<typeof vi.fn>;
-  getAll: ReturnType<typeof vi.fn>;
-  getById: ReturnType<typeof vi.fn>;
-  update: ReturnType<typeof vi.fn>;
-  remove: ReturnType<typeof vi.fn>;
+const valid = {
+  title: "Nako lake",
+  journalId: JOURNAL_ID,
+  content: "Gold light on the peaks.",
+  mood: "calm",
+  weather: "windy",
+  location: { type: "Point", coordinates: [78.63, 31.88] },
+  tags: ["sunset"],
 };
 
-const mockedValidateBody = validateBody as unknown as ReturnType<typeof vi.fn>;
-
-const createReq = (body: any = {}, extra: Partial<any> = {}) => ({
-  cookies: {
-    get: vi.fn().mockReturnValue({ value: "token" }),
-  },
-  json: vi.fn().mockResolvedValue(body),
-  url: "http://localhost/api/v2/entries",
-  ...extra,
-});
-
-const user = { id: "user-id" } as any;
-
-beforeEach(() => {
-  vi.clearAllMocks();
-});
-
-describe("createEntryController", () => {
-  it("creates entry and returns 201", async () => {
-    const body = { title: "Entry 1", journalId: "j1", authorId: "ignored" };
-    const created = { id: "e1", ...body, authorId: user.id };
-
-    mockedValidateBody.mockReturnValue(body);
-    mockedEntryService.create.mockResolvedValue(created);
-
-    const req = createReq(body);
-    const res = await createEntryController(req as any, user);
-
+describe("entries API", () => {
+  it("creates an entry with the session user as author", async () => {
+    svc.create.mockResolvedValue({ _id: ENTRY_ID } as never);
+    const res = await createEntryController(
+      makeReq("/api/v2/entries", { method: "POST", body: { ...valid, authorId: "64b0000000000000000000ff" } }),
+      ctx()
+    );
     expect(res.status).toBe(201);
-    const json = await res.json();
-    expect(json.success).toBe(true);
-    expect(json.data).toEqual(created);
-    expect(mockedEntryService.create).toHaveBeenCalledWith(user.id, body);
+    const [authorId, payload] = svc.create.mock.calls[0];
+    expect(authorId).toBe(USER_ID);
+    expect(payload).not.toHaveProperty("authorId");
   });
 
-  it("returns 401 when no token cookie", async () => {
-    const body = { title: "Entry 1", journalId: "j1" };
-    const req = createReq(body, {
-      cookies: { get: vi.fn().mockReturnValue(undefined) },
-    });
-
-    const res = await createEntryController(req as any, user);
-    expect(res.status).toBe(401);
-    const json = await res.json();
-    expect(json.success).toBe(false);
-    expect(json.message).toBe("Unauthorized");
+  it("rejects bad moods, out-of-range coordinates and missing titles", async () => {
+    for (const body of [
+      { ...valid, mood: "furious" },
+      { ...valid, location: { type: "Point", coordinates: [200, 10] } },
+      { ...valid, title: "" },
+      { ...valid, journalId: "nope" },
+    ]) {
+      const res = await createEntryController(makeReq("/api/v2/entries", { method: "POST", body }), ctx());
+      expect(res.status).toBe(400);
+    }
+    expect(svc.create).not.toHaveBeenCalled();
   });
-});
 
-describe("getEntriesController", () => {
-  it("returns entries, optionally filtered by journalId", async () => {
-    const entries = [{ id: "e1" }, { id: "e2" }];
-    mockedEntryService.getAll.mockResolvedValue(entries);
+  it("returns 404 when writing into someone else's journal", async () => {
+    svc.create.mockRejectedValue(new NotFoundError("Journal not found"));
+    const res = await createEntryController(makeReq("/api/v2/entries", { method: "POST", body: valid }), ctx());
+    expect(res.status).toBe(404);
+  });
 
-    const req = createReq({}, { url: "http://localhost/api/v2/entries?journalId=j1" });
-    const res = await getEntriesController(req as any, user);
-
+  it("passes journal and search filters to the service", async () => {
+    svc.getAll.mockResolvedValue([] as never);
+    const res = await getEntriesController(makeReq(`/api/v2/entries?journalId=${JOURNAL_ID}&q=lake`), ctx());
     expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json.success).toBe(true);
-    expect(json.data).toEqual(entries);
-    expect(mockedEntryService.getAll).toHaveBeenCalledWith(user.id, "j1");
-  });
-});
-
-describe("getEntryController", () => {
-  it("returns a single entry", async () => {
-    const entry = { id: "e1" };
-    mockedEntryService.getById.mockResolvedValue(entry);
-
-    const req = createReq();
-    const res = await getEntryController(req as any, user, { params: { id: "e1" } } as any);
-
-    expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json.success).toBe(true);
-    expect(json.data).toEqual(entry);
-    expect(mockedEntryService.getById).toHaveBeenCalledWith("e1", user.id);
-  });
-});
-
-describe("updateEntryController", () => {
-  it("updates entry and returns 200", async () => {
-    const body = { title: "Updated" };
-    const updated = { id: "e1", title: "Updated" };
-
-    mockedValidateBody.mockReturnValue(body);
-    mockedEntryService.update.mockResolvedValue(updated);
-
-    const req = createReq(body);
-    const res = await updateEntryController(req as any, user, { params: { id: "e1" } } as any);
-
-    expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json.success).toBe(true);
-    expect(json.data).toEqual(updated);
-    expect(mockedEntryService.update).toHaveBeenCalledWith("e1", user.id, body);
+    expect(svc.getAll).toHaveBeenCalledWith(USER_ID, { journalId: JOURNAL_ID, q: "lake" });
   });
 
-  it("returns 401 when no token cookie", async () => {
-    const body = { title: "Updated" };
-    const req = createReq(body, {
-      cookies: { get: vi.fn().mockReturnValue(undefined) },
-    });
-
-    const res = await updateEntryController(req as any, user, { params: { id: "e1" } } as any);
-    expect(res.status).toBe(401);
-    const json = await res.json();
-    expect(json.success).toBe(false);
-    expect(json.message).toBe("Unauthorized");
+  it("rejects a malformed journalId filter", async () => {
+    const res = await getEntriesController(makeReq("/api/v2/entries?journalId=nope"), ctx());
+    expect(res.status).toBe(400);
   });
-});
 
-describe("deleteEntryController", () => {
-  it("deletes entry and returns 200", async () => {
-    const deleted = { id: "e1" };
-    mockedEntryService.remove.mockResolvedValue(deleted);
+  it("gets, updates and deletes by id", async () => {
+    svc.getById.mockResolvedValue({ _id: ENTRY_ID } as never);
+    svc.update.mockResolvedValue({ _id: ENTRY_ID } as never);
+    svc.remove.mockResolvedValue({ _id: ENTRY_ID } as never);
+    const params = ctx({ id: ENTRY_ID });
 
-    const req = createReq();
-    const res = await deleteEntryController(req as any, user, { params: { id: "e1" } } as any);
+    expect((await getEntryController(makeReq(`/api/v2/entries/${ENTRY_ID}`), params)).status).toBe(200);
+    expect(
+      (await updateEntryController(makeReq(`/api/v2/entries/${ENTRY_ID}`, { method: "PATCH", body: { mood: null } }), params))
+        .status
+    ).toBe(200);
+    // A partial update must only contain the fields that were sent.
+    expect(svc.update).toHaveBeenCalledWith(ENTRY_ID, USER_ID, { mood: null });
+    expect((await deleteEntryController(makeReq(`/api/v2/entries/${ENTRY_ID}`, { method: "DELETE" }), params)).status).toBe(200);
+  });
 
-    expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json.success).toBe(true);
-    expect(json.data).toEqual(deleted);
-    expect(mockedEntryService.remove).toHaveBeenCalledWith("e1", user.id);
+  it("returns 404 for entries the user doesn't own", async () => {
+    svc.getById.mockRejectedValue(new NotFoundError("Entry not found"));
+    const res = await getEntryController(makeReq(`/api/v2/entries/${ENTRY_ID}`), ctx({ id: ENTRY_ID }));
+    expect(res.status).toBe(404);
   });
 });

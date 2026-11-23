@@ -1,90 +1,68 @@
 // src/controllers/journalController.ts
-
-import { NextRequest, NextResponse } from "next/server";
-import { AppError } from "@/lib/errors";
-import { successResponse, errorResponse } from "@/lib/response";
+import { NextResponse } from "next/server";
+import { successResponse } from "@/lib/response";
+import { handleError } from "@/lib/handleError";
 import { journalService } from "@/services/journalService";
 import { validateBody } from "@/lib/validate";
-import { CreateJournalSchema } from "@/schemas/journal";
+import { CreateJournalSchema, UpdateJournalSchema, objectIdSchema } from "@/schemas/journal";
 import { withAuth } from "@/lib/withAuth";
+import { BadRequestError } from "@/lib/errors";
 
+function parseId(id: string | undefined) {
+  const parsed = objectIdSchema.safeParse(id);
+  if (!parsed.success) throw new BadRequestError("Invalid journal id");
+  return parsed.data;
+}
+
+// POST /api/v2/journal
 export const createJournalController = withAuth(async (req, user) => {
   try {
-    const token = req.cookies.get("token")?.value || "";
-    if (!token) throw new AppError("Unauthorized", 401);
-
-    const userId = user?.id; 
-
-    const body = await req.json();
-    const payload = validateBody(CreateJournalSchema, body);
-
-    const journal = await journalService.create(userId, payload);
-
+    const payload = validateBody(CreateJournalSchema, await req.json());
+    const journal = await journalService.create(user.id, payload);
     return NextResponse.json(successResponse(journal, "Journal created"), { status: 201 });
-  } catch (err: any) {
-    if (err instanceof AppError) {
-      return NextResponse.json(errorResponse(err.message), { status: err.statusCode });
-    }
-    return NextResponse.json(errorResponse(err.message || "Internal Server Error"), { status: 500 });
+  } catch (err) {
+    return handleError(err);
   }
 });
 
-export const getJournalsController = withAuth(async (req, user) => {
+// GET /api/v2/journal
+export const getJournalsController = withAuth(async (_req, user) => {
   try {
-    console.log({user})
-    const token = req.cookies.get("token")?.value || "";
-    if (!token) throw new AppError("Unauthorized", 401);
-
-    const userId = user?.id;
-
-    const journals = await journalService.getAll(userId);
-
+    const journals = await journalService.getAll(user.id);
     return NextResponse.json(successResponse(journals, "Journals fetched"), { status: 200 });
-  } catch (err: any) {
-    if (err instanceof AppError) {
-      return NextResponse.json(errorResponse(err.message), { status: err.statusCode });
-    }
-    return NextResponse.json(errorResponse(err.message || "Internal Server Error"), { status: 500 });
+  } catch (err) {
+    return handleError(err);
   }
 });
 
-export const updateJournalController = withAuth(async (req, user, {params}) => {
+// GET /api/v2/journal/[id]
+export const getJournalController = withAuth(async (_req, user, { params }) => {
   try {
-    const token = req.cookies.get("token")?.value || "";
-    if (!token) throw new AppError("Unauthorized", 401);
+    const journal = await journalService.getById(parseId(params.id), user.id);
+    return NextResponse.json(successResponse(journal, "Journal fetched"), { status: 200 });
+  } catch (err) {
+    return handleError(err);
+  }
+});
 
-    console.log({params})
-
-    const userId = user?.id;
-    const { id } = await params;
-
-    const body = await req.json();
-    const journal = await journalService.update(id, userId, body);
-
+// PATCH /api/v2/journal/[id]
+export const updateJournalController = withAuth(async (req, user, { params }) => {
+  try {
+    const id = parseId(params.id);
+    const payload = validateBody(UpdateJournalSchema, await req.json());
+    const journal = await journalService.update(id, user.id, payload);
     return NextResponse.json(successResponse(journal, "Journal updated"), { status: 200 });
-  } catch (err: any) {
-    if (err instanceof AppError) {
-      return NextResponse.json(errorResponse(err.message), { status: err.statusCode });
-    }
-    return NextResponse.json(errorResponse(err.message || "Internal Server Error"), { status: 500 });
+  } catch (err) {
+    return handleError(err);
   }
 });
 
-export const deleteJournalController = withAuth(async (req, user,  { params }) => {
+// DELETE /api/v2/journal/[id]  (also deletes the journal's entries)
+export const deleteJournalController = withAuth(async (_req, user, { params }) => {
   try {
-    const token = req.cookies.get("token")?.value || "";
-    if (!token) throw new AppError("Unauthorized", 401);
-
-    const userId = user?.id;
-    const { id } = params;
-
-    const journal = await journalService.remove(id, userId);
-
+    const journal = await journalService.remove(parseId(params.id), user.id);
     return NextResponse.json(successResponse(journal, "Journal deleted"), { status: 200 });
-  } catch (err: any) {
-    if (err instanceof AppError) {
-      return NextResponse.json(errorResponse(err.message), { status: err.statusCode });
-    }
-    return NextResponse.json(errorResponse(err.message || "Internal Server Error"), { status: 500 });
+  } catch (err) {
+    return handleError(err);
   }
 });

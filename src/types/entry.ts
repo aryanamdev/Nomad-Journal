@@ -8,18 +8,23 @@ export interface ImageMeta {
 
 export interface GeoPoint {
   type: "Point";
-  coordinates: [number, number];
+  coordinates: [number, number]; // [lng, lat]
 }
 
-export interface IEntry {
+export type Mood = "happy" | "excited" | "calm" | "grateful" | "tired" | "sad";
+export type Weather = "sunny" | "cloudy" | "rainy" | "snowy" | "windy" | "stormy";
+
+export interface Entry {
   _id: string;
   title: string;
   journalId: string;
   authorId: string;
   content: string;
-  mood?: string;
-  weather?: string;
+  mood?: Mood;
+  weather?: Weather;
   location?: GeoPoint | null;
+  placeName?: string;
+  entryDate: string;
   images?: ImageMeta[];
   isPublic?: boolean;
   tags?: string[];
@@ -27,28 +32,14 @@ export interface IEntry {
   updatedAt?: string;
 }
 
-// Frontend-friendly type
-export type Entry = IEntry;
-
-// Payloads used on the client
-export type CreateEntryInput = Omit<IEntry, "_id" | "authorId" | "createdAt" | "updatedAt">;
-export type UpdateEntryInput = Partial<CreateEntryInput>;
-
-// Type for API responses
-export type EntryResponse = {
-  success: boolean;
-  message?: string;
-  data?: Entry | Entry[];
-};
-
-// Optional list response with pagination
-export type EntryListResponse = {
-  success: boolean;
-  data: {
-    entries: Entry[];
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-  };
+export type EntryInput = {
+  title: string;
+  journalId: string;
+  content: string;
+  mood?: Mood | null;
+  weather?: Weather | null;
+  location?: GeoPoint | null;
+  placeName?: string;
+  entryDate: string;
+  tags?: string[];
 };

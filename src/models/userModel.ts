@@ -37,6 +37,12 @@ const userSchema = new Schema({
     type: Boolean,
     default: false,
   },
+  // Shared demo account used by the "Try the demo" button
+  isDemo: {
+    type: Boolean,
+    default: false,
+  },
+  demoSeededAt: Date,
   role: {
     type: String,
     enum: ["user", "admin"],

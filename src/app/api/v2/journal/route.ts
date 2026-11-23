@@ -1,18 +1,4 @@
-import "@/dbConfig/dbConfig"
+import { createJournalController, getJournalsController } from "@/controllers/journalController";
 
-
-import { 
-    createJournalController, 
-    deleteJournalController, 
-    getJournalsController,
-    updateJournalController 
-} from "@/controllers/journalController";
-
-
-export { 
-    createJournalController as POST,  
-    deleteJournalController as DELETE, 
-    updateJournalController as PATCH, 
-    getJournalsController as GET
-};
-
+export const POST = createJournalController;
+export const GET = getJournalsController;

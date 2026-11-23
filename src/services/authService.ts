@@ -1,88 +1,82 @@
 // src/services/authService.ts
-import User from "@/models/userModel";
 import bcrypt from "bcryptjs";
-import jwt, { JwtPayload } from "jsonwebtoken";
+import { connect } from "@/dbConfig/dbConfig";
+import User from "@/models/userModel";
 import { NotFoundError, UnauthorizedError, BadRequestError, ForbiddenError } from "@/lib/errors";
-import { RegisterDTO, LoginDTO, VerifyDTO, ViewerDTO } from "@/schemas/auth";
-import { User as UserType, UserTokenData } from "@/types/user";
-import { sendEmail } from "@/helpers/verifyEmail";
+import { RegisterDTO, LoginDTO, VerifyDTO, ViewerDTO, UpdateProfileDTO } from "@/schemas/auth";
+import { signToken, verifyToken, sessionCookieOptions } from "@/lib/jwt";
+import { isEmailConfigured, sendEmail } from "@/helpers/verifyEmail";
+import { demoService, DEMO_EMAIL } from "./demoService";
 
-const JWT_SECRET = String(process.env.JWT_SECRET) || "";
+const SAFE_FIELDS = "-password -verifyToken -verifyTokenExpiryDate -forgotPasswordToken -forgotPasswordTokenExpiryDate";
 
-const COOKIE_NAME = "token";
-const COOKIE_MAX_AGE = 7 * 24 * 60 * 60; // 1 day in seconds
+function issueSession(user: { _id: unknown; email: string; fullName: string }) {
+  return signToken({ id: String(user._id), email: user.email, fullName: user.fullName });
+}
 
 export const authService = {
   async register(payload: RegisterDTO) {
-    const { email, password, fullName } = payload;
+    await connect();
+    const email = payload.email.toLowerCase();
+    if (email === DEMO_EMAIL) throw new BadRequestError("This email is reserved");
+
     const existing = await User.findOne({ email }).lean();
-    if (existing) throw new BadRequestError("User already exists with this email");
+    if (existing) throw new BadRequestError("An account with this email already exists");
 
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const hashedPassword = await bcrypt.hash(payload.password, 10);
+    const emailEnabled = isEmailConfigured();
 
-    const newUser = new User({
+    const savedUser = await User.create({
       email,
-      fullName,
+      fullName: payload.fullName,
       password: hashedPassword,
-      // isVerified defaults to false (model should reflect that)
+      isVerified: !emailEnabled,
     });
 
-    const savedUser = await newUser.save();
-    // ideally hide password before returning (or remove it)
-    const userObj = savedUser.toObject();
+    if (emailEnabled) {
+      await sendEmail({ email, emailType: "VERIFY", userId: String(savedUser._id) });
+    }
 
-    await sendEmail({ email, emailType: "VERIFY", userId: savedUser._id })
-
-    delete userObj.password;
-
-
-    return userObj;
+    const user = await User.findById(savedUser._id).select(SAFE_FIELDS).lean();
+    return { user, requiresVerification: emailEnabled };
   },
 
   async login(payload: LoginDTO) {
-    const { email, password } = payload;
-    const user = await User.findOne({ email });
-    if (!user) throw new NotFoundError("User does not exist with this email");
+    await connect();
+    const user = await User.findOne({ email: payload.email.toLowerCase() });
+    // Same message for unknown email and wrong password, so accounts can't be probed.
+    if (!user) throw new UnauthorizedError("Incorrect email or password");
 
-    const match = await bcrypt.compare(password, user.password);
+    const match = await bcrypt.compare(payload.password, user.password);
     if (!match) throw new UnauthorizedError("Incorrect email or password");
 
-    if (!user.isVerified) throw new ForbiddenError("Please verify your email to login");
+    if (!user.isVerified) throw new ForbiddenError("Please verify your email before logging in");
 
-    const tokenPayload = {
-      id: user._id,
-      fullName: user.fullName,
-      email: user.email,
-    };
+    const safeUser = await User.findById(user._id).select(SAFE_FIELDS).lean();
+    return { token: issueSession(user), user: safeUser };
+  },
 
-    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: "1d" });
-
-    const userObj = user.toObject();
-    delete userObj.password;
-
-    return { token, user: userObj };
+  async demoLogin() {
+    await connect();
+    const user = await demoService.ensureDemoUser();
+    const safeUser = await User.findById(user._id).select(SAFE_FIELDS).lean();
+    return { token: issueSession(user), user: safeUser };
   },
 
   async logout() {
-    // nothing to do server-side except tell client to clear cookie
+    // Sessions are stateless JWTs; the controller clears the cookie.
     return true;
   },
 
   async verify({ token }: VerifyDTO) {
-    if (!token) throw new BadRequestError("Token missing");
+    await connect();
+    const user = await User.findOne({ verifyToken: token });
+    if (!user) throw new NotFoundError("This verification link is invalid or has already been used");
 
-    const user = await User.findOne({ verifyToken: token }).exec();
-    if (!user) throw new NotFoundError("Invalid token");
+    if (user.isVerified) return { alreadyVerified: true };
 
-    if (user.isVerified) {
-      // idempotent: return success even if already verified
-      return { alreadyVerified: true };
-    }
-
-    // check expiry if model saves expiry date
     if (user.verifyTokenExpiryDate && user.verifyTokenExpiryDate < new Date()) {
-      throw new BadRequestError("Token expired");
+      throw new BadRequestError("This verification link has expired");
     }
 
     user.isVerified = true;
@@ -94,45 +88,44 @@ export const authService = {
   },
 
   async me({ token }: ViewerDTO) {
-    if (!token) throw new BadRequestError("Token missing");
+    if (!token) throw new UnauthorizedError("Not logged in");
 
-    console.log({token})
-
-    let decoded: JwtPayload;
+    let userId: string;
     try {
-      decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
-      console.log({decoded})
-    } catch (err: any) {
-      if (err?.name === "TokenExpiredError") {
-        throw new UnauthorizedError("Session expired. Please login again");
+      userId = verifyToken(token).id;
+    } catch (err: unknown) {
+      if ((err as { name?: string })?.name === "TokenExpiredError") {
+        throw new UnauthorizedError("Session expired. Please log in again");
       }
-      throw new UnauthorizedError("Invalid token");
+      throw new UnauthorizedError("Invalid session");
     }
 
-    // validate payload shape
-    if (!decoded?.id || !decoded?.email) {
-      throw new UnauthorizedError("Malformed token payload");
-    }
-
-    // Fetch user to ensure token still represents an active user
-    const user = await User.findById<UserType>(decoded.id).lean();
+    await connect();
+    const user = await User.findById(userId).select(SAFE_FIELDS).lean();
     if (!user) throw new UnauthorizedError("User no longer exists");
 
-    const { password, ...safeUser } = user;
+    return { success: true, user };
+  },
 
-    return {
-      success: true,
-      user: safeUser,
-    };
+  async updateMe(userId: string, data: UpdateProfileDTO) {
+    await connect();
+    const current = await User.findById(userId).select("isDemo").lean<{ isDemo?: boolean }>();
+    if (!current) throw new NotFoundError("User not found");
+    if (current.isDemo && (data.fullName !== undefined || data.bio !== undefined)) {
+      throw new ForbiddenError("The demo profile can't be edited. Create a free account to try this.");
+    }
+
+    const update: Record<string, unknown> = {};
+    if (data.fullName !== undefined) update.fullName = data.fullName;
+    if (data.bio !== undefined) update.bio = data.bio;
+    if (data.preferences?.defaultView) update["preferences.defaultView"] = data.preferences.defaultView;
+
+    const user = await User.findByIdAndUpdate(userId, { $set: update }, { new: true, runValidators: true })
+      .select(SAFE_FIELDS)
+      .lean();
+    if (!user) throw new NotFoundError("User not found");
+    return user;
   },
-  // helper to build cookie options for NextResponse
-  cookieOptions() {
-    return {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict" as const,
-      path: "/",
-      maxAge: COOKIE_MAX_AGE,
-    };
-  },
+
+  cookieOptions: sessionCookieOptions,
 };

@@ -1,145 +1,100 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { AppError, BadRequestError, UnauthorizedError, NotFoundError } from "@/lib/errors";
-import { createJournalController, getJournalsController, updateJournalController, deleteJournalController } from "@/controllers/journalController";
+import { makeReq, ctx, USER_ID, JOURNAL_ID } from "./helpers";
+import { NotFoundError } from "@/lib/errors";
+import {
+  createJournalController,
+  getJournalsController,
+  getJournalController,
+  updateJournalController,
+  deleteJournalController,
+} from "@/controllers/journalController";
 import { journalService } from "@/services/journalService";
-import { validateBody } from "@/lib/validate";
-import { CreateJournalSchema } from "@/schemas/journal";
-
-vi.mock("@/lib/withAuth", () => ({
-  withAuth: (handler: any) => handler,
-}));
 
 vi.mock("@/services/journalService", () => ({
-  journalService: {
-    create: vi.fn(),
-    getAll: vi.fn(),
-    update: vi.fn(),
-    remove: vi.fn(),
-  },
+  journalService: { create: vi.fn(), getAll: vi.fn(), getById: vi.fn(), update: vi.fn(), remove: vi.fn() },
 }));
 
-vi.mock("@/lib/validate", () => ({
-  validateBody: vi.fn(),
-}));
+const svc = vi.mocked(journalService);
+beforeEach(() => vi.clearAllMocks());
 
-const mockedJournalService = journalService as unknown as {
-  create: ReturnType<typeof vi.fn>;
-  getAll: ReturnType<typeof vi.fn>;
-  update: ReturnType<typeof vi.fn>;
-  remove: ReturnType<typeof vi.fn>;
-};
-
-const mockedValidateBody = validateBody as unknown as ReturnType<typeof vi.fn>;
-
-const createReq = (body: any = {}) => ({
-  cookies: {
-    get: vi.fn().mockReturnValue({ value: "token" }),
-  },
-  json: vi.fn().mockResolvedValue(body),
-});
-
-const user = { id: "user-id" } as any;
-
-beforeEach(() => {
-  vi.clearAllMocks();
-});
-
-describe("createJournalController", () => {
-  it("creates journal and returns 201", async () => {
-    const body = { title: "My Journal" };
-    const created = { id: "j1", title: body.title };
-
-    mockedValidateBody.mockReturnValue(body);
-    mockedJournalService.create.mockResolvedValue(created);
-
-    const req = createReq(body);
-    const res = await createJournalController(req as any, user);
-
+describe("journal API", () => {
+  it("creates a journal for the logged-in user", async () => {
+    svc.create.mockResolvedValue({ _id: JOURNAL_ID, title: "Japan" } as never);
+    const res = await createJournalController(
+      makeReq("/api/v2/journal", { method: "POST", body: { title: "Japan", color: "#0ea5e9" } }),
+      ctx()
+    );
     expect(res.status).toBe(201);
-    const json = await res.json();
-    expect(json.success).toBe(true);
-    expect(json.data).toEqual(created);
-    expect(mockedJournalService.create).toHaveBeenCalledWith(user.id, body);
+    expect(svc.create).toHaveBeenCalledWith(USER_ID, { title: "Japan", color: "#0ea5e9" });
   });
 
-  it("maps AppError to its status code", async () => {
-    const body = { title: "" };
-    const err = new BadRequestError("Title is required");
+  it("ignores a createdBy sent by the client", async () => {
+    svc.create.mockResolvedValue({} as never);
+    await createJournalController(
+      makeReq("/api/v2/journal", { method: "POST", body: { title: "Japan", createdBy: "64b0000000000000000000ff" } }),
+      ctx()
+    );
+    expect(svc.create).toHaveBeenCalledWith(USER_ID, { title: "Japan" });
+  });
 
-    mockedValidateBody.mockReturnValue(body);
-    mockedJournalService.create.mockRejectedValue(err);
+  it("rejects an empty title and an invalid color", async () => {
+    const empty = await createJournalController(makeReq("/api/v2/journal", { method: "POST", body: { title: " " } }), ctx());
+    const badColor = await createJournalController(
+      makeReq("/api/v2/journal", { method: "POST", body: { title: "Japan", color: "red" } }),
+      ctx()
+    );
+    expect(empty.status).toBe(400);
+    expect(badColor.status).toBe(400);
+    expect(svc.create).not.toHaveBeenCalled();
+  });
 
-    const req = createReq(body);
-    const res = await createJournalController(req as any, user);
+  it("lists the user's journals", async () => {
+    svc.getAll.mockResolvedValue([{ _id: JOURNAL_ID, entryCount: 3 }] as never);
+    const res = await getJournalsController(makeReq("/api/v2/journal"), ctx());
+    expect(res.status).toBe(200);
+    expect((await res.json()).data[0].entryCount).toBe(3);
+    expect(svc.getAll).toHaveBeenCalledWith(USER_ID);
+  });
 
+  it("fetches one journal by id", async () => {
+    svc.getById.mockResolvedValue({ _id: JOURNAL_ID } as never);
+    const res = await getJournalController(makeReq(`/api/v2/journal/${JOURNAL_ID}`), ctx({ id: JOURNAL_ID }));
+    expect(res.status).toBe(200);
+    expect(svc.getById).toHaveBeenCalledWith(JOURNAL_ID, USER_ID);
+  });
+
+  it("returns 400 for a malformed id instead of querying", async () => {
+    const res = await getJournalController(makeReq("/api/v2/journal/nope"), ctx({ id: "nope" }));
     expect(res.status).toBe(400);
-    const json = await res.json();
-    expect(json.success).toBe(false);
-    expect(json.message).toBe("Title is required");
-  });
-});
-
-describe("getJournalsController", () => {
-  it("returns list of journals", async () => {
-    const journals = [{ id: "j1" }, { id: "j2" }];
-    mockedJournalService.getAll.mockResolvedValue(journals);
-
-    const req = createReq();
-    const res = await getJournalsController(req as any, user);
-
-    expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json.success).toBe(true);
-    expect(json.data).toEqual(journals);
-    expect(mockedJournalService.getAll).toHaveBeenCalledWith(user.id);
-  });
-});
-
-describe("updateJournalController", () => {
-  it("updates journal and returns 200", async () => {
-    const body = { title: "Updated" };
-    const updated = { id: "j1", title: "Updated" };
-
-    mockedJournalService.update.mockResolvedValue(updated);
-
-    const req = createReq(body);
-    const res = await updateJournalController(req as any, user, { params: { id: "j1" } } as any);
-
-    expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json.success).toBe(true);
-    expect(json.data).toEqual(updated);
-    expect(mockedJournalService.update).toHaveBeenCalledWith("j1", user.id, body);
+    expect(svc.getById).not.toHaveBeenCalled();
   });
 
-  it("returns 404 when journal not found", async () => {
-    const body = { title: "Updated" };
-    const err = new NotFoundError("Journal not found");
+  it("validates updates", async () => {
+    svc.update.mockResolvedValue({ _id: JOURNAL_ID, title: "Renamed" } as never);
+    const ok = await updateJournalController(
+      makeReq(`/api/v2/journal/${JOURNAL_ID}`, { method: "PATCH", body: { title: "Renamed" } }),
+      ctx({ id: JOURNAL_ID })
+    );
+    const bad = await updateJournalController(
+      makeReq(`/api/v2/journal/${JOURNAL_ID}`, { method: "PATCH", body: { title: "x".repeat(101) } }),
+      ctx({ id: JOURNAL_ID })
+    );
+    expect(ok.status).toBe(200);
+    expect(bad.status).toBe(400);
+  });
 
-    mockedJournalService.update.mockRejectedValue(err);
-
-    const req = createReq(body);
-    const res = await updateJournalController(req as any, user, { params: { id: "missing" } } as any);
-
+  it("returns 404 when the journal belongs to someone else", async () => {
+    svc.remove.mockRejectedValue(new NotFoundError("Journal not found"));
+    const res = await deleteJournalController(
+      makeReq(`/api/v2/journal/${JOURNAL_ID}`, { method: "DELETE" }),
+      ctx({ id: JOURNAL_ID })
+    );
     expect(res.status).toBe(404);
-    const json = await res.json();
-    expect(json.success).toBe(false);
-    expect(json.message).toBe("Journal not found");
   });
-});
 
-describe("deleteJournalController", () => {
-  it("deletes journal and returns 200", async () => {
-    const deleted = { id: "j1" };
-    mockedJournalService.remove.mockResolvedValue(deleted);
-
-    const req = createReq();
-    const res = await deleteJournalController(req as any, user, { params: { id: "j1" } } as any);
-
-    expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json.success).toBe(true);
-    expect(json.data).toEqual(deleted);
-    expect(mockedJournalService.remove).toHaveBeenCalledWith("j1", user.id);
+  it("requires a session", async () => {
+    const res = await getJournalsController(makeReq("/api/v2/journal", { token: null }), ctx());
+    expect(res.status).toBe(401);
+    expect(svc.getAll).not.toHaveBeenCalled();
   });
 });

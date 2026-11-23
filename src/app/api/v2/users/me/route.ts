@@ -1,5 +1,4 @@
-//api/v2/me
+import { meController, updateMeController } from "@/controllers/authController";
 
-import "@/dbConfig/dbConfig"
-import { meController } from "@/controllers/authController"
-export {meController as GET}
+export const GET = meController;
+export const PATCH = updateMeController;

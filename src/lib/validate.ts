@@ -1,5 +1,5 @@
 // src/lib/validate.ts
-import { ZodSchema, ZodError } from "zod";
+import { ZodSchema } from "zod";
 import { BadRequestError } from "./errors";
 
 // Define a type for validation errors

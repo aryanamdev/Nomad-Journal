@@ -1,10 +1,10 @@
 export interface User {
-    _id: string
-    fullName: string,
-    email: string,
-    password: string
-}
-
-export interface UserTokenData extends Omit<User, "_id"> {
-    id: string
+  _id: string;
+  fullName: string;
+  email: string;
+  bio?: string;
+  isVerified?: boolean;
+  isDemo?: boolean;
+  preferences?: { defaultView?: "list" | "map" | "calendar" };
+  createdAt?: string;
 }
