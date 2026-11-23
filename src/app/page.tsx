@@ -86,7 +86,7 @@ export default async function Home() {
       </section>
 
       <section className="mx-auto max-w-6xl px-6 py-24">
-        <h2 className="font-display max-w-2xl text-5xl text-balance">Three things, done carefully</h2>
+        <h2 className="font-display max-w-2xl text-5xl text-balance">Built for writing on the road</h2>
         <ol className="mt-12 grid gap-10 md:grid-cols-3">
           {STEPS.map((s) => (
             <li key={s.title} className="border-ink border-t-2 pt-5">
