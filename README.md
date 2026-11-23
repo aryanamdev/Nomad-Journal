@@ -1,126 +1,100 @@
 # Nomad Journal
 
-## Overview
+A travel journal that keeps each story tied to the place it happened. Write entries with mood, weather, tags and a map pin, then read a trip as a timeline, a calendar, or a route across the map.
 
-Nomad Journal is a full-stack journaling system built with **Next.js and TypeScript**. On the surface, it’s a travel journaling app. Under the hood, it’s really an exercise in **designing a clean, maintainable product architecture** that combines frontend UI, backend APIs, authentication, and state management in one cohesive codebase.
+**Live demo: [nomad-journal.vercel.app](https://nomad-journal.vercel.app)**. Click "Open the demo journal" to explore a sample account without signing up.
 
-The goal of this project was not to build a flashy app, but to model how a real product could be structured and evolved over time without becoming hard to reason about.
+![Nomad Journal dashboard](public/screenshots/dashboard.png)
 
----
+## Features
 
-## Why This Project Exists
+- **Journals** for each trip or theme, each with its own colour
+- **Entries** with a story, date, mood, weather, tags and a location (search a place, click the map or use your current position)
+- **Three views**: a timeline list, a month calendar, and a map that joins each journal's stops into a dashed route in date order
+- **Search** across titles, stories, places and tags
+- **Accounts** with JWT sessions in httpOnly cookies, optional email verification, and a profile page
+- **One-click demo** that signs visitors into a shared sample account, refreshed every few hours
+- Works on phones: the three columns collapse into one, and entries open full screen
 
-As products grow, they often suffer from:
+## Tech stack
 
-* unclear ownership between frontend and backend logic
-* authentication checks scattered everywhere
-* APIs that are hard to evolve without breaking clients
-* frontend state that becomes difficult to track
+| Layer | Choice |
+| --- | --- |
+| Framework | Next.js 15 (App Router), React 19, TypeScript |
+| API | Next.js route handlers, versioned REST under `/api/v2`, OpenAPI 3 spec |
+| Data | MongoDB Atlas with Mongoose |
+| Validation | Zod at every API boundary |
+| Auth | JWT in an httpOnly cookie, bcrypt password hashing |
+| State | Zustand for shared dashboard state |
+| UI | Tailwind CSS v4, Radix primitives, Leaflet maps |
+| Tests | Vitest (41 tests), GitHub Actions CI |
+| Hosting | Vercel (Mumbai region, next to the database) |
 
-Nomad Journal was built to explore how to avoid these problems by being intentional about **boundaries, contracts, and responsibilities** from the start.
+## Architecture
 
----
+```
+src/
+  app/            pages and API route handlers (/api/v2/...)
+  controllers/    turn HTTP requests into service calls and responses
+  services/       business rules: ownership checks, search, demo seeding
+  models/         Mongoose schemas
+  schemas/        Zod request schemas (shared rules for create and update)
+  lib/            auth wrapper, JWT helpers, error handling, API client
+  store/          Zustand store that keeps the three dashboard columns in sync
+  components/     dashboard, map and UI components
+tests/            controller, service and auth tests
+```
 
-## Domain Model
+A few decisions worth calling out:
 
-The domain is intentionally simple but realistic:
+- **Ownership is enforced in the service layer.** Every query is scoped to the logged-in user, and writing an entry into a journal checks that the journal is yours first. Anything you don't own returns 404, not 403, so ids can't be probed.
+- **Partial updates only touch the fields sent.** Create and update share field rules, but defaults live only on create, so editing an entry's mood can't reset its story. Sending `null` clears an optional field.
+- **The database connection is cached** across serverless invocations instead of reconnecting per request.
+- **Email is optional.** With SMTP configured, new accounts must verify their email; without it, they're verified on sign-up, which keeps local setup and the demo simple.
 
-* **Journal** represents a trip, phase, or theme (for example, “Summer 2025 in Europe”).
-* **Entry** represents individual records within a journal, with optional metadata like mood, weather, and location.
+## API
 
-Journals and entries are owned by a user, and that ownership is enforced consistently at the API level. Domain rules live in service layers rather than being embedded directly in route handlers.
+Interactive docs are served at [`/api-docs`](https://nomad-journal.vercel.app/api-docs) from [`openapi.yaml`](openapi.yaml).
 
----
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/users/register`, `/users/login`, `/users/logout` | Accounts and sessions |
+| POST | `/users/demo` | Sign in to the demo account |
+| GET, PATCH | `/users/me` | Current user and profile |
+| GET, POST | `/journal` | List or create journals |
+| GET, PATCH, DELETE | `/journal/:id` | One journal (delete removes its entries) |
+| GET, POST | `/entries?journalId=&q=` | List, filter, search or create entries |
+| GET, PATCH, DELETE | `/entries/:id` | One entry |
 
-## API Design
+## Running locally
 
-The backend is implemented using **Next.js route handlers**, exposing a versioned REST API under `/api/v2`.
+Requires Node.js 22 and a MongoDB database (a free [Atlas](https://www.mongodb.com/atlas) cluster works).
 
-Key characteristics:
+```bash
+npm install
+cp .env.example .env.local   # then set MONGO_URL and JWT_SECRET
+npm run dev
+```
 
-* Resource-oriented endpoints for users, journals, and entries
-* Input validation using Zod at API boundaries
-* API versioning to allow the system to evolve safely
-* An OpenAPI 3 specification (`openapi.yaml`) maintained alongside the code
-* Swagger UI exposed via `/api-docs` for easy exploration
+Open http://localhost:3000.
 
-The API is treated as a first-class part of the system, not an afterthought.
+| Script | What it does |
+| --- | --- |
+| `npm run dev` | Start the dev server |
+| `npm test` | Run the test suite |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | TypeScript, no emit |
+| `npm run build` | Production build |
 
----
+## Environment variables
 
-## Authentication & Authorization
-
-Authentication is handled using **JWTs stored in HTTP-only cookies**.
-
-* Auth checks are enforced centrally using custom middleware
-* Protected routes fail early when authentication is missing or invalid
-* The authenticated user context is resolved once and reused downstream
-
-This keeps authorization logic consistent and avoids spreading auth checks across unrelated parts of the codebase.
-
----
-
-## Frontend Architecture
-
-The frontend uses the **Next.js App Router** and is structured around responsibility rather than pages alone.
-
-The main dashboard uses a three-column layout:
-
-* left column for journals and navigation
-* middle column for composing and viewing entries (list, calendar, map)
-* right column for journal details and editing
-
-This layout was chosen deliberately to simulate the kind of state coordination and UI complexity found in real SaaS dashboards.
-
----
-
-## State Management Strategy
-
-State is handled with clear intent:
-
-* server-derived data comes from the API
-* shared dashboard state (active journal, entries, current user) is managed with Zustand
-* local UI state stays inside components
-
-This approach avoids overusing global state while still allowing different parts of the dashboard to stay in sync.
-
----
-
-## Failure & Edge Cases
-
-The system handles common product-level failures in predictable ways:
-
-* unauthenticated requests are rejected or redirected early
-* invalid input is caught at validation boundaries
-* API errors are returned in a consistent shape
-
-The focus is on clarity and debuggability rather than exhaustive fault tolerance.
-
----
-
-## Tradeoffs
-
-Some conscious tradeoffs made in this project:
-
-* REST APIs were chosen over GraphQL to keep the system simple and explicit
-* Backend logic lives inside the Next.js app instead of a separate service to reduce overhead
-* Zustand was chosen over heavier state solutions to keep mental complexity low
-
-These choices optimize for maintainability and product velocity rather than maximum flexibility.
+| Name | Required | Notes |
+| --- | --- | --- |
+| `MONGO_URL` | Yes | MongoDB connection string |
+| `JWT_SECRET` | Yes | Long random string, e.g. `openssl rand -hex 32` |
+| `DOMAIN` | No | Public URL, used in verification emails |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | No | Turn on email verification |
 
 ---
 
-## Code Quality
-
-The codebase is written in **TypeScript** and enforces consistency through ESLint and Prettier. The focus is on making the system easy to read and safe to change by someone new to the project.
-
----
-
-## What This Project Shows
-
-* Ownership of a real product domain
-* Practical full-stack architecture using Next.js
-* Clear API and auth boundaries
-* Thoughtful state management in a non-trivial UI
-
-This project reflects how I think about building systems that are meant to be understood, maintained, and extended over time.
+Designed and built by [Aryan Namdev](https://aryannamdev.online).

@@ -31,7 +31,7 @@ export function JournalSidebar() {
 
   const row = (active: boolean) =>
     cn(
-      "group relative flex w-full shrink-0 items-center gap-3 rounded-md px-3 py-2 text-left text-[0.95rem] transition-colors lg:shrink",
+      "group relative flex w-auto shrink-0 items-center gap-3 rounded-md px-3 py-2 text-left text-[0.95rem] transition-colors lg:w-full lg:shrink",
       active ? "bg-page text-ink shadow-[0_1px_0_var(--border)]" : "text-ink/70 hover:bg-page/60 hover:text-ink"
     );
 
@@ -64,7 +64,7 @@ export function JournalSidebar() {
       <nav className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-1 lg:flex-col lg:overflow-y-auto" aria-label="Journals">
         <button className={row(selectedJournalId === null)} onClick={() => selectJournal(null)} aria-current={selectedJournalId === null}>
           <span className="border-ink/50 size-3 shrink-0 rounded-[2px] border border-dashed" aria-hidden />
-          <span className="flex-1 truncate">Every journal</span>
+          <span className="truncate lg:flex-1">Every journal</span>
           <span className="font-caption text-muted-foreground text-sm tabular-nums">{total}</span>
         </button>
         {journals.map((j) => {
@@ -72,7 +72,7 @@ export function JournalSidebar() {
           return (
             <button key={j._id} className={row(active)} onClick={() => selectJournal(j._id)} aria-current={active}>
               <span className="size-3 shrink-0 rounded-[2px]" style={{ background: j.color }} aria-hidden />
-              <span className="max-w-44 flex-1 truncate lg:max-w-none">{j.title}</span>
+              <span className="max-w-44 truncate lg:max-w-none lg:flex-1">{j.title}</span>
               <span className="font-caption text-muted-foreground text-sm tabular-nums">{j.entryCount ?? 0}</span>
             </button>
           );
