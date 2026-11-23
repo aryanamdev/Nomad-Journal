@@ -4,6 +4,7 @@ import "leaflet/dist/leaflet.css";
 import { useEffect } from "react";
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
 import { dotIcon } from "./EntriesMap";
+import { TILE_ATTRIBUTION, TILE_URL } from "./tiles";
 
 type LatLng = { lat: number; lng: number };
 
@@ -28,16 +29,13 @@ export default function LocationPicker({ value, onChange }: { value: LatLng | nu
       center={value ? [value.lat, value.lng] : [25, 10]}
       zoom={value ? 8 : 1}
       scrollWheelZoom
-      className="h-full w-full rounded-md"
+      className="h-full w-full"
       worldCopyJump
     >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
+      <TileLayer attribution={TILE_ATTRIBUTION} url={TILE_URL} />
       <ClickHandler onPick={onChange} />
       <Recenter value={value} />
-      {value && <Marker position={[value.lat, value.lng]} icon={dotIcon("#0f766e", true)} />}
+      {value && <Marker position={[value.lat, value.lng]} icon={dotIcon("#2346c0", true)} />}
     </MapContainer>
   );
 }

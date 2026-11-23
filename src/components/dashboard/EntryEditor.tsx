@@ -53,7 +53,7 @@ function ChipGroup<T extends string>({
             onClick={() => onChange(value === key ? null : key)}
             className={cn(
               "rounded-full border px-2.5 py-1 text-xs transition",
-              value === key ? "border-primary bg-primary text-primary-foreground" : "hover:bg-accent"
+              value === key ? "border-ink bg-ink text-page" : "border-input hover:border-ink/40"
             )}
           >
             <span aria-hidden>{options[key].emoji}</span> {options[key].label}
@@ -173,7 +173,7 @@ export function EntryEditor({ open, onOpenChange, entry, defaultJournalId }: Pro
         <form onSubmit={submit} className="grid gap-5">
           <DialogHeader>
             <DialogTitle>{entry ? "Edit entry" : "New entry"}</DialogTitle>
-            <DialogDescription>Write down what happened, where, and how it felt.</DialogDescription>
+            <DialogDescription>What happened, where, and how it felt.</DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
@@ -213,13 +213,14 @@ export function EntryEditor({ open, onOpenChange, entry, defaultJournalId }: Pro
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="entry-content">Story</Label>
+            <Label htmlFor="entry-content">What happened</Label>
             <Textarea
               id="entry-content"
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="What did you see, eat, hear?"
-              rows={6}
+              rows={7}
+              className="font-story text-[1.02rem] leading-7"
               maxLength={20000}
             />
           </div>

@@ -42,16 +42,16 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="grid h-dvh grid-rows-[auto_1fr] overflow-hidden lg:grid-cols-[260px_minmax(0,1fr)_380px] lg:grid-rows-1">
+    <main className="grid h-dvh grid-rows-[auto_1fr] overflow-hidden lg:grid-cols-[256px_minmax(0,1fr)_420px] lg:grid-rows-1">
       <JournalSidebar />
       <EntriesPanel />
 
       {/* Desktop: always-visible third column. Mobile: full-screen sheet when an entry is open. */}
-      <aside className="hidden min-h-0 overflow-y-auto border-l p-6 lg:block" aria-label="Details">
+      <aside className="bg-page hidden min-h-0 overflow-y-auto border-l lg:block" aria-label="Details">
         <DetailPanel />
       </aside>
       {selectedEntryId && (
-        <div className="bg-background fixed inset-0 z-[900] overflow-y-auto p-4 lg:hidden" role="dialog" aria-label="Entry">
+        <div className="bg-page fixed inset-0 z-[900] overflow-y-auto lg:hidden" role="dialog" aria-label="Entry">
           <DetailPanel />
         </div>
       )}

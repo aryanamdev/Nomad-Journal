@@ -43,6 +43,7 @@ const userSchema = new Schema({
     default: false,
   },
   demoSeededAt: Date,
+  demoSeedVersion: Number,
   role: {
     type: String,
     enum: ["user", "admin"],

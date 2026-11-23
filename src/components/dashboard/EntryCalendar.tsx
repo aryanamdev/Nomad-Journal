@@ -47,7 +47,7 @@ export function EntryCalendar({ entries, colorFor, selectedId, onSelect }: Props
   return (
     <div className="grid gap-3">
       <div className="flex items-center justify-between">
-        <h3 className="font-medium">{month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h3>
+        <h3 className="font-display text-3xl">{month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h3>
         <div className="flex gap-1">
           <Button variant="outline" size="icon" onClick={() => shift(-1)} aria-label="Previous month">
             <ChevronLeft />
@@ -61,9 +61,9 @@ export function EntryCalendar({ entries, colorFor, selectedId, onSelect }: Props
         </div>
       </div>
 
-      <div className="grid grid-cols-7 overflow-hidden rounded-xl border">
+      <div className="bg-page grid grid-cols-7 overflow-hidden rounded-lg border">
         {WEEKDAYS.map((d) => (
-          <div key={d} className="bg-muted/50 text-muted-foreground border-b py-2 text-center text-xs font-medium">
+          <div key={d} className="font-caption text-muted-foreground border-b py-2 text-center text-sm">
             {d}
           </div>
         ))}
@@ -74,14 +74,14 @@ export function EntryCalendar({ entries, colorFor, selectedId, onSelect }: Props
             <div
               key={i}
               className={cn(
-                "min-h-20 border-b border-l p-1 first:border-l-0 [&:nth-child(7n+8)]:border-l-0",
-                !inMonth && "bg-muted/30 text-muted-foreground"
+                "min-h-24 border-b border-l p-1.5 [&:nth-child(7n+8)]:border-l-0",
+                !inMonth && "bg-paper/60 text-muted-foreground"
               )}
             >
               <div
                 className={cn(
-                  "mb-1 grid size-6 place-items-center rounded-full text-xs",
-                  sameDay(day, today) && "bg-primary text-primary-foreground"
+                  "font-caption mb-1 grid size-6 place-items-center rounded-full text-sm tabular-nums",
+                  sameDay(day, today) && "bg-pen text-white"
                 )}
               >
                 {day.getDate()}
@@ -93,8 +93,8 @@ export function EntryCalendar({ entries, colorFor, selectedId, onSelect }: Props
                     onClick={() => onSelect(e._id)}
                     title={e.title}
                     className={cn(
-                      "truncate rounded px-1 py-0.5 text-left text-[11px] leading-tight text-white",
-                      e._id === selectedId && "ring-foreground ring-2"
+                      "truncate rounded-[3px] px-1.5 py-0.5 text-left text-xs leading-tight font-medium text-white",
+                      e._id === selectedId && "ring-pen ring-2 ring-offset-1"
                     )}
                     style={{ background: colorFor(e) }}
                   >

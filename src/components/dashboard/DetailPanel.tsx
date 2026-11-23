@@ -1,8 +1,9 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { ArrowLeft, CalendarDays, MapPin, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, MapPin, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MOOD_META, WEATHER_META, formatDate } from "@/lib/entryMeta";
 import { useJournalStore } from "@/store/useJournalStore";
@@ -12,92 +13,82 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { EntryEditor } from "./EntryEditor";
 import { JournalDialog } from "./JournalDialog";
 
-function Stat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="bg-card rounded-lg border p-3">
-      <div className="text-lg font-semibold tabular-nums">{value}</div>
-      <div className="text-muted-foreground text-xs">{label}</div>
-    </div>
-  );
-}
+const MiniMap = dynamic(() => import("@/components/map/MiniMap"), {
+  ssr: false,
+  loading: () => <div className="bg-muted h-full w-full" />,
+});
 
 function EntryDetail({ entry, journal }: { entry: Entry; journal?: Journal }) {
   const selectEntry = useJournalStore((s) => s.selectEntry);
   const deleteEntry = useJournalStore((s) => s.deleteEntry);
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const coords = entry.location?.coordinates;
+
+  const feel = [
+    entry.mood && MOOD_META[entry.mood] && `${MOOD_META[entry.mood].emoji} Felt ${MOOD_META[entry.mood].label.toLowerCase()}`,
+    entry.weather && WEATHER_META[entry.weather] && `${WEATHER_META[entry.weather].emoji} ${WEATHER_META[entry.weather].label}`,
+  ].filter(Boolean);
 
   return (
-    <article className="grid gap-5">
-      <div className="flex items-center justify-between">
-        <Button variant="ghost" size="sm" onClick={() => selectEntry(null)}>
-          <ArrowLeft /> Back
+    <article className="grid">
+      <div className="flex items-center justify-between px-6 pt-5 lg:px-8">
+        <Button variant="ghost" size="sm" className="-ml-3" onClick={() => selectEntry(null)}>
+          <ArrowLeft /> Close
         </Button>
         <div className="flex gap-1">
           <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
             <Pencil /> Edit
           </Button>
-          <Button variant="outline" size="icon" onClick={() => setConfirming(true)} aria-label="Delete entry">
+          <Button variant="ghost" size="icon" onClick={() => setConfirming(true)} aria-label="Delete entry">
             <Trash2 />
           </Button>
         </div>
       </div>
 
-      <header className="grid gap-2">
+      {coords && (
+        <div className="mx-6 mt-5 h-40 overflow-hidden rounded-md border lg:mx-8">
+          <MiniMap lat={coords[1]} lng={coords[0]} color={journal?.color ?? "#2346c0"} />
+        </div>
+      )}
+
+      <header className="px-6 pt-6 lg:px-8">
         {journal && (
-          <span className="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
-            <span className="size-2 rounded-full" style={{ background: journal.color }} />
+          <p className="font-caption text-sm" style={{ color: journal.color }}>
             {journal.title}
-          </span>
+          </p>
         )}
-        <h2 className="text-2xl font-semibold tracking-tight">{entry.title}</h2>
-        <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-sm">
-          <span className="inline-flex items-center gap-1">
-            <CalendarDays className="size-4" />
-            {formatDate(entry.entryDate, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-          </span>
+        <h2 className="font-display mt-1 text-[2.4rem] text-balance">{entry.title}</h2>
+        <p className="font-caption text-muted-foreground mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[0.95rem]">
+          <span>{formatDate(entry.entryDate, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span>
           {entry.placeName && (
             <span className="inline-flex items-center gap-1">
-              <MapPin className="size-4" />
+              <MapPin className="size-3.5" aria-hidden />
               {entry.placeName}
             </span>
           )}
-        </div>
+        </p>
+        {feel.length > 0 && <p className="text-ink/80 mt-1.5 flex flex-wrap gap-x-4 text-sm">{feel.map((f) => <span key={f as string}>{f}</span>)}</p>}
       </header>
 
-      {(entry.mood || entry.weather) && (
-        <div className="flex flex-wrap gap-2">
-          {entry.mood && MOOD_META[entry.mood] && (
-            <span className="bg-secondary rounded-full px-3 py-1 text-sm">
-              {MOOD_META[entry.mood].emoji} Feeling {MOOD_META[entry.mood].label.toLowerCase()}
-            </span>
-          )}
-          {entry.weather && WEATHER_META[entry.weather] && (
-            <span className="bg-secondary rounded-full px-3 py-1 text-sm">
-              {WEATHER_META[entry.weather].emoji} {WEATHER_META[entry.weather].label}
-            </span>
-          )}
-        </div>
-      )}
-
-      {entry.content ? (
-        <p className="leading-7 whitespace-pre-wrap">{entry.content}</p>
-      ) : (
-        <p className="text-muted-foreground text-sm italic">No story written yet.</p>
-      )}
+      <div className="ruled mx-6 mt-6 lg:mx-8">
+        {entry.content ? (
+          <p className="font-story text-ink text-[1.06rem] leading-7 whitespace-pre-wrap">{entry.content}</p>
+        ) : (
+          <p className="font-story text-muted-foreground leading-7 italic">Nothing written for this day yet.</p>
+        )}
+      </div>
 
       {!!entry.tags?.length && (
-        <div className="flex flex-wrap gap-1.5">
+        <p className="text-pen mx-6 mt-5 flex flex-wrap gap-x-3 text-sm lg:mx-8">
           {entry.tags.map((t) => (
-            <span key={t} className="bg-secondary rounded-full px-2.5 py-0.5 text-xs">
-              #{t}
-            </span>
+            <span key={t}>#{t}</span>
           ))}
-        </div>
+        </p>
       )}
 
       {entry.updatedAt && (
-        <p className="text-muted-foreground border-t pt-3 text-xs">Last edited {formatDate(entry.updatedAt)}</p>
+        <p className="text-muted-foreground mx-6 mt-8 mb-8 text-xs lg:mx-8">Last edited {formatDate(entry.updatedAt)}</p>
       )}
 
       <EntryEditor open={editing} onOpenChange={setEditing} entry={entry} />
@@ -105,7 +96,8 @@ function EntryDetail({ entry, journal }: { entry: Entry; journal?: Journal }) {
         open={confirming}
         onOpenChange={setConfirming}
         title="Delete this entry?"
-        description={`"${entry.title}" will be permanently deleted.`}
+        description={`"${entry.title}" will be deleted for good.`}
+        confirmLabel="Delete entry"
         onConfirm={async () => {
           try {
             await deleteEntry(entry._id);
@@ -124,7 +116,6 @@ function Overview() {
   const entries = useJournalStore((s) => s.entries);
   const selectedJournalId = useJournalStore((s) => s.selectedJournalId);
   const deleteJournal = useJournalStore((s) => s.deleteJournal);
-  const search = useJournalStore((s) => s.search);
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
@@ -132,69 +123,68 @@ function Overview() {
 
   const stats = useMemo(() => {
     const places = new Set(entries.map((e) => e.placeName).filter(Boolean));
-    const dates = entries.map((e) => new Date(e.entryDate).getTime());
+    const times = entries.map((e) => new Date(e.entryDate).getTime());
     const moods = new Map<string, number>();
     entries.forEach((e) => e.mood && moods.set(e.mood, (moods.get(e.mood) ?? 0) + 1));
     const topMood = [...moods].sort((a, b) => b[1] - a[1])[0]?.[0] as keyof typeof MOOD_META | undefined;
-    return {
-      places: places.size,
-      first: dates.length ? new Date(Math.min(...dates)) : null,
-      last: dates.length ? new Date(Math.max(...dates)) : null,
-      topMood,
-    };
+    const days = times.length ? Math.round((Math.max(...times) - Math.min(...times)) / 86_400_000) + 1 : 0;
+    const tags = new Map<string, number>();
+    entries.forEach((e) => e.tags?.forEach((t) => tags.set(t, (tags.get(t) ?? 0) + 1)));
+    const topTags = [...tags].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([t]) => t);
+    return { places: places.size, days, topMood, topTags };
   }, [entries]);
 
+  const facts: [string, string | number][] = [
+    ["Entries", entries.length],
+    ["Places", stats.places],
+    ["Days covered", stats.days],
+    ["Most common mood", stats.topMood ? `${MOOD_META[stats.topMood].emoji} ${MOOD_META[stats.topMood].label}` : "None yet"],
+  ];
+
   return (
-    <div className="grid gap-5">
-      <header className="grid gap-2">
-        <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-          {journal ? "Journal" : "Overview"}
-        </span>
-        <h2 className="text-2xl font-semibold tracking-tight">{journal?.title ?? "All your journals"}</h2>
-        {journal?.description ? (
-          <p className="text-muted-foreground text-sm leading-6">{journal.description}</p>
-        ) : (
-          !journal && (
-            <p className="text-muted-foreground text-sm">
-              {journals.length} {journals.length === 1 ? "journal" : "journals"}. Select an entry to read it here.
-            </p>
-          )
-        )}
-      </header>
+    <div className="px-6 py-8 lg:px-8">
+      {journal && <span className="mb-4 block h-1.5 w-12 rounded-full" style={{ background: journal.color }} aria-hidden />}
+      <h2 className="font-display text-[2.4rem] text-balance">{journal?.title ?? "All your travels"}</h2>
+      <p className="font-story text-ink/80 mt-3 text-[1.06rem] leading-7">
+        {journal
+          ? journal.description || "No description yet. Add one to remember what this journal is about."
+          : `${journals.length} ${journals.length === 1 ? "journal" : "journals"}. Pick an entry from the list to read it here.`}
+      </p>
 
-      <div className="grid grid-cols-2 gap-2">
-        <Stat label={search ? "Matching entries" : "Entries"} value={entries.length} />
-        <Stat label="Places" value={stats.places} />
-        <Stat
-          label="Top mood"
-          value={stats.topMood ? `${MOOD_META[stats.topMood].emoji} ${MOOD_META[stats.topMood].label}` : "–"}
-        />
-        <Stat
-          label="Days covered"
-          value={stats.first && stats.last ? Math.round((+stats.last - +stats.first) / 86_400_000) + 1 : 0}
-        />
-      </div>
+      <dl className="mt-8 grid grid-cols-2 border-t">
+        {facts.map(([label, value], i) => (
+          <div key={label} className={`border-b py-4 ${i % 2 === 0 ? "border-r pr-4" : "pl-4"}`}>
+            <dt className="font-caption text-muted-foreground text-sm">{label}</dt>
+            <dd className="font-display mt-1 text-[1.9rem] tabular-nums">{value}</dd>
+          </div>
+        ))}
+      </dl>
 
-      {stats.first && stats.last && (
-        <p className="text-muted-foreground text-sm">
-          {formatDate(stats.first)} – {formatDate(stats.last)}
-        </p>
+      {stats.topTags.length > 0 && (
+        <div className="mt-6">
+          <h3 className="font-caption text-muted-foreground text-sm">Frequent tags</h3>
+          <p className="text-pen mt-1.5 flex flex-wrap gap-x-3 text-sm">
+            {stats.topTags.map((t) => (
+              <span key={t}>#{t}</span>
+            ))}
+          </p>
+        </div>
       )}
 
       {journal && (
-        <div className="flex gap-2 border-t pt-4">
+        <div className="mt-8 flex gap-2">
           <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
             <Pencil /> Edit journal
           </Button>
-          <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setConfirming(true)}>
-            <Trash2 /> Delete
+          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => setConfirming(true)}>
+            <Trash2 /> Delete journal
           </Button>
           <JournalDialog open={editing} onOpenChange={setEditing} journal={journal} />
           <ConfirmDialog
             open={confirming}
             onOpenChange={setConfirming}
             title="Delete this journal?"
-            description={`"${journal.title}" and its ${journal.entryCount ?? 0} entries will be permanently deleted.`}
+            description={`"${journal.title}" and its ${journal.entryCount ?? 0} entries will be deleted for good.`}
             confirmLabel="Delete journal"
             onConfirm={async () => {
               try {

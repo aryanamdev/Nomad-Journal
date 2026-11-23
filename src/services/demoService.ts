@@ -9,6 +9,8 @@ export const DEMO_EMAIL = "demo@nomadjournal.app";
 
 /** Demo content is restored to its original state at most this often. */
 const RESEED_AFTER_MS = 6 * 60 * 60 * 1000;
+/** Bump when the sample data changes so existing demo accounts pick it up. */
+const SEED_VERSION = 2;
 
 type SeedEntry = {
   title: string;
@@ -32,7 +34,7 @@ const SEED: SeedJournal[] = [
   {
     title: "Spiti Valley Road Trip",
     description: "Two weeks driving the high road from Shimla to Kaza and back over Kunzum La.",
-    color: "#f97316",
+    color: "#b4532a",
     entries: [
       {
         title: "Into the mountains",
@@ -83,7 +85,7 @@ const SEED: SeedJournal[] = [
   {
     title: "Lisbon Long Weekend",
     description: "Three days of trams, tiles and pastéis de nata.",
-    color: "#0ea5e9",
+    color: "#2f7fa3",
     entries: [
       {
         title: "Getting lost in Alfama",
@@ -123,7 +125,7 @@ const SEED: SeedJournal[] = [
   {
     title: "Everyday Notes",
     description: "Small moments worth remembering between trips.",
-    color: "#22c55e",
+    color: "#3f7d5a",
     entries: [
       {
         title: "First run after the trip",
@@ -180,7 +182,7 @@ async function seed(userId: unknown) {
     );
   }
 
-  await User.updateOne({ _id: userId }, { $set: { demoSeededAt: new Date() } });
+  await User.updateOne({ _id: userId }, { $set: { demoSeededAt: new Date(), demoSeedVersion: SEED_VERSION } });
 }
 
 export const demoService = {
@@ -202,7 +204,8 @@ export const demoService = {
     }
 
     const seededAt: Date | undefined = user.get("demoSeededAt");
-    if (!seededAt || Date.now() - seededAt.getTime() > RESEED_AFTER_MS) {
+    const stale = !seededAt || Date.now() - seededAt.getTime() > RESEED_AFTER_MS;
+    if (stale || user.get("demoSeedVersion") !== SEED_VERSION) {
       await seed(user._id);
     }
 

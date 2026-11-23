@@ -18,7 +18,8 @@ export const WEATHER_META: Record<Weather, { emoji: string; label: string }> = {
   stormy: { emoji: "⛈️", label: "Stormy" },
 };
 
-export const JOURNAL_COLORS = ["#f97316", "#0ea5e9", "#22c55e", "#a855f7", "#ec4899", "#eab308", "#14b8a6", "#64748b"];
+// Map-ink colours: readable on map paper and as route lines.
+export const JOURNAL_COLORS = ["#b4532a", "#2f7fa3", "#3f7d5a", "#c08a1e", "#7a4a8c", "#b84a6a", "#7f8f3a", "#4f6470"];
 
 export function formatDate(value: string | Date, opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" }) {
   return new Date(value).toLocaleDateString(undefined, opts);
