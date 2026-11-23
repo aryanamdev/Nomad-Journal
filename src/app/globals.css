@@ -121,7 +121,8 @@
       color-mix(in srgb, var(--contour) 28%, transparent) calc(1.75rem - 1px),
       color-mix(in srgb, var(--contour) 28%, transparent) 1.75rem
     );
-    background-position: 0 0.4rem;
+    /* Puts each rule just under the text baseline of 1.75rem-leading body copy. */
+    background-position: 0 -0.3rem;
   }
   /* Topographic contour texture used once, on the landing hero. */
   .contours {
