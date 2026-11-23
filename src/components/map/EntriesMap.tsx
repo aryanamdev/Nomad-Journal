@@ -6,7 +6,7 @@ import { useEffect, useMemo } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, Tooltip, useMap } from "react-leaflet";
 import type { Entry } from "@/types/entry";
 import { formatDate } from "@/lib/entryMeta";
-import { TILE_ATTRIBUTION, TILE_URL } from "./tiles";
+import { LABELS_URL, MAX_ZOOM, TILE_ATTRIBUTION, TILE_URL } from "./tiles";
 
 // Plain CSS dots instead of Leaflet's default image markers, which break under bundlers.
 export function dotIcon(color: string, active = false) {
@@ -58,8 +58,10 @@ export default function EntriesMap({ entries, colorFor, selectedId, onSelect }: 
   }, [located, colorFor]);
 
   return (
-    <MapContainer center={[20, 0]} zoom={2} scrollWheelZoom className="h-full w-full" worldCopyJump>
-      <TileLayer attribution={TILE_ATTRIBUTION} url={TILE_URL} />
+    <MapContainer
+      maxZoom={MAX_ZOOM} center={[20, 0]} zoom={2} scrollWheelZoom className="h-full w-full" worldCopyJump>
+      <TileLayer attribution={TILE_ATTRIBUTION} url={TILE_URL} maxZoom={MAX_ZOOM} />
+      <TileLayer url={LABELS_URL} maxZoom={MAX_ZOOM} />
       <FitBounds points={points} />
       {routes.map((r) => (
         <Polyline
